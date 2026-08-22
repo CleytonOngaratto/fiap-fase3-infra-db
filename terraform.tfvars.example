@@ -1,0 +1,27 @@
+# Copie para terraform.tfvars (gitignored) SE quiser ajustar algo.
+#
+# Nenhuma variável é obrigatória aqui: tudo que varia por sessão do lab vem do SSM. Diferente do
+# repo fiap-fase3-infra-k8s, onde os nomes dos roles do EKS não têm default de propósito.
+
+# region  = "us-east-1"   # o lab só libera us-east-1 e us-west-2
+# project = "fiap-fase3"
+
+# engine_version = "16"           # prefixo de major basta; casa com o docker-compose da app
+# instance_class = "db.t3.micro"  # o lab libera micro/small/medium
+# allocated_storage = 20          # mínimo do gp2 (o lab não libera gp3)
+
+# ⚠️ Storage autoscaling SOBE sozinho e não desce. 0 = desligado.
+# max_allocated_storage = 0
+
+# backup_retention_period = 1     # 1 mantém o backup automático ligado; 0 desliga
+
+# ⚠️ Estes dois precisam casar com a app — mudar aqui sem mudar lá quebra o Flyway.
+# db_name     = "oficina_db"
+# db_username = "postgres"
+
+# Concessões ao ambiente efêmero do lab — reveja todas antes de chamar isto de produção.
+# multi_az            = false
+# storage_encrypted   = true
+# deletion_protection = false   # com true o `terraform destroy` falha
+# skip_final_snapshot = true    # com false o snapshot sobrevive ao destroy e segue cobrando
+# apply_immediately   = true
