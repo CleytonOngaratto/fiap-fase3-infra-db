@@ -267,7 +267,14 @@ aws ssm delete-parameter --name /fase3/vpc/private-subnets
 aws ssm delete-parameter --name /fase3/eks/node-sg-id
 ```
 
-## Decisões (resumo — detalhamento nos RFCs/ADRs do Bloco 7)
+## Decisões (resumo)
+
+Detalhamento na documentação arquitetural do repositório da aplicação,
+[`fiap-fase3-app/docs/arquitetura/`](https://github.com/CleytonOngaratto/fiap-fase3-app/tree/main/docs/arquitetura):
+[RFC-002 — banco RDS PostgreSQL](https://github.com/CleytonOngaratto/fiap-fase3-app/blob/main/docs/arquitetura/rfc/RFC-002-banco-rds-postgres.md),
+[banco-de-dados.md — ER e desacoplamento](https://github.com/CleytonOngaratto/fiap-fase3-app/blob/main/docs/arquitetura/banco-de-dados.md),
+[ADR-001 — contrato por SSM](https://github.com/CleytonOngaratto/fiap-fase3-app/blob/main/docs/arquitetura/adr/ADR-001-ssm-vs-terraform-remote-state.md) e
+[ADR-002 — ambiente único](https://github.com/CleytonOngaratto/fiap-fase3-app/blob/main/docs/arquitetura/adr/ADR-002-ambiente-unico.md).
 
 | Decisão | Motivo |
 |---|---|
