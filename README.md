@@ -17,7 +17,7 @@ aqui.**
 
 ## Arquitetura
 
-Linha cheia = provisionado por **este** repositório. Tracejado = criado por outros blocos.
+Linha cheia = provisionado por **este** repositório. Tracejado = criado pelos outros repositórios.
 
 ```mermaid
 flowchart TB
@@ -26,7 +26,7 @@ flowchart TB
     subgraph VPC["VPC 10.0.0.0/16 - repo 2"]
         subgraph PRIV["Subnets privadas /20 - 2 AZs"]
             NODES["Nos do EKS - pods da app"]
-            LBD["Lambda na VPC - Bloco 5"]
+            LBD["Lambda na VPC - repo auth-serverless"]
             RDS[("RDS PostgreSQL 16 - db.t3.micro")]
         end
     end
@@ -56,7 +56,7 @@ O `fiap-fase3-rds` (anexado à instância) aceita 5432 de exatamente duas origen
 cluster EKS** e o **`fiap-fase3-rds-client`**. Esse segundo grupo não protege nada — ele é um
 **crachá**: nasce vazio, e quem o anexa passa a alcançar o banco.
 
-Isso existe por um motivo concreto. No Bloco 5 a Lambda precisa falar com o RDS, mas o security
+Isso existe por um motivo concreto. A Lambda de autenticação precisa falar com o RDS, mas o security
 group dela ainda não existe quando este repositório é aplicado. As alternativas eram liberar o CIDR
 inteiro da VPC (qualquer coisa na rede alcançaria o banco) ou fazer o repositório 1 criar uma regra
 dentro de um security group que não é dele. Com o crachá, o repo 1 lê um id do SSM e anexa —
@@ -125,18 +125,18 @@ reset do lab e não tinham default —, aqui tudo que varia por sessão chega pe
 
 | Parâmetro | Tipo | Conteúdo | Consumido por |
 |---|---|---|---|
-| `/fase3/rds/endpoint` | String | **hostname, sem a porta** | Blocos 4 e 5 |
-| `/fase3/rds/port` | String | `5432` | Blocos 4 e 5 |
-| `/fase3/rds/db-name` | String | `oficina_db` | Blocos 4 e 5 |
-| `/fase3/rds/username` | String | `postgres` | Blocos 4 e 5 |
-| `/fase3/rds/password` | **SecureString** | senha gerada no apply | Blocos 4 e 5 |
-| `/fase3/rds/client-sg-id` | String | crachá de acesso ao banco | Bloco 5 |
+| `/fase3/rds/endpoint` | String | **hostname, sem a porta** | `app`, `auth-serverless` |
+| `/fase3/rds/port` | String | `5432` | `app`, `auth-serverless` |
+| `/fase3/rds/db-name` | String | `oficina_db` | `app`, `auth-serverless` |
+| `/fase3/rds/username` | String | `postgres` | `app`, `auth-serverless` |
+| `/fase3/rds/password` | **SecureString** | senha gerada no apply | `app`, `auth-serverless` |
+| `/fase3/rds/client-sg-id` | String | crachá de acesso ao banco | `auth-serverless` |
 
 > **`endpoint` é só o host.** O atributo `endpoint` do provider AWS já vem como `host:5432`;
 > publicá-lo assim, ao lado de um parâmetro de porta, produziria `host:5432:5432` em qualquer URL
 > montada pelos consumidores. Por isso publicamos `address`.
 
-### O que a app espera (Bloco 4)
+### O que a aplicação espera
 
 Os valores acima não são livres — eles casam com o que a aplicação Quarkus já usa (`oficina_db`,
 `postgres`, PostgreSQL 16, schema `public`). Mudar `db_name` ou `db_username` aqui sem mudar lá
@@ -149,7 +149,7 @@ conectar.
 O pgjdbc do Quarkus 3.26 usa `sslmode=prefer` e negocia TLS sozinho, mas vale explicitar
 `?sslmode=require` na JDBC URL: troca um default de driver por um contrato visível.
 
-### O que a Lambda precisa saber (Bloco 5)
+### O que a Lambda de autenticação precisa saber
 
 1. **Anexe o `/fase3/rds/client-sg-id`** às ENIs da função — não crie regra no SG do RDS. Se a
    função precisar de saída para outros serviços, crie um SG próprio no repo 1 e anexe os **dois**:
@@ -168,7 +168,7 @@ O pgjdbc do Quarkus 3.26 usa `sslmode=prefer` e negocia TLS sozinho, mas vale ex
    *unrecognized configuration parameter* — não é sinal de que está desligado; a regra vive no
    `pg_hba`, não num GUC consultável. Confira por `aws rds describe-db-parameters`.)
 
-Mantemos o parameter group default de propósito: desligar TLS para conveniência do Bloco 5 é
+Mantemos o parameter group default de propósito: desligar TLS para conveniência do cliente Node é
 exatamente o tipo de atalho que a banca pergunta.
 
 ## Verificação (Definition of Done)
@@ -180,14 +180,14 @@ exatamente o tipo de atalho que a banca pergunta.
 
 ```powershell
 aws rds describe-db-instances --db-instance-identifier fiap-fase3-postgres `
-  --query "DBInstances[0].DBInstanceStatus" --output text          # available  <- DoD do bloco
+  --query "DBInstances[0].DBInstanceStatus" --output text          # available  <- a instância está pronta
 
 aws ssm get-parameters-by-path --path /fase3/rds --recursive --query "Parameters[].Name"
 ```
 
 ### Teste de fumaça — rode uma vez, logo após a instância ficar `available`
 
-Prova a regra do security group de ponta a ponta e de-risca o Bloco 4. Exige o cluster do repo 2 de
+Prova a regra do security group de ponta a ponta, antes de a aplicação depender disso. Exige o cluster de
 pé: com `publicly_accessible = false` **não há como alcançar o banco do seu notebook** — todo
 diagnóstico passa por um pod.
 
@@ -218,6 +218,46 @@ Saída esperada:
 Falhou? O suspeito é o security group, não a rede: confirme que `/fase3/eks/node-sg-id` carrega o
 `cluster_security_group_id` do EKS.
 
+## CI/CD
+
+[`.github/workflows/terraform.yml`](.github/workflows/terraform.yml):
+
+| Gatilho | O que roda |
+|---|---|
+| `pull_request` → `main` | `fmt -check` → `init` → `validate` → `plan` (**nunca aplica**) |
+| `push` → `main` (merge do PR) | idem + `apply -auto-approve` |
+| `workflow_dispatch` | `plan` \| `apply` \| `destroy` |
+
+**PR ou merge que só toca arquivos `.md` não roda o workflow** (`paths-ignore`). Sem isso, corrigir um
+README exigiria a sessão do lab de pé — e o merge dispararia um `apply`. O filtro é tudo-ou-nada: um
+único arquivo fora de `**.md` no mesmo PR faz o workflow rodar normalmente.
+
+O workflow precisa de **quatro valores no repositório**, e nenhum deles tem default:
+
+| Nome | Tipo | Origem |
+|---|---|---|
+| `AWS_ACCESS_KEY_ID` | secret | painel *AWS Details* do Learner Lab |
+| `AWS_SECRET_ACCESS_KEY` | secret | idem |
+| `AWS_SESSION_TOKEN` | secret | idem — **o mais esquecido**; sem ele o erro vem como `InvalidClientTokenId`, que parece chave errada |
+| `TF_STATE_BUCKET` | variable | nome do bucket criado por `bootstrap-backend.ps1` no repositório `fiap-fase3-infra-k8s` |
+
+Os três secrets rotacionam a cada sessão do lab (~4h) e são cópias independentes do
+`~/.aws/credentials`: atualizar o arquivo local **não** atualiza o GitHub. Para propagá-los aos 4
+repositórios de uma vez existe o `scripts/refresh-gh-secrets.ps1` no repositório
+[`fiap-fase3-infra-k8s`](https://github.com/CleytonOngaratto/fiap-fase3-infra-k8s) — ele exige o
+[`gh` CLI](https://cli.github.com) autenticado; sem o `gh`, o caminho é o painel
+(*Settings → Secrets and variables → Actions*).
+
+> ⚠️ **Secret e variable têm de ser de _repositório_**, não de *Environment*: este workflow não
+> declara `environment:`, e secret de Environment simplesmente não chega até ele.
+
+> ⚠️ **Não marque este workflow como status check obrigatório** no ruleset: ele depende da credencial
+> temporária do laboratório e travaria todo merge feito fora do horário do lab.
+
+> 🔴 **`TF_STATE_BUCKET` não pode ter espaço em branco no fim.** A GitHub preserva o que você colar, e
+> um `\n` no fim do valor faz o `init` falhar com `Failed to parse uri: .../bucket%0D%0A` — que parece
+> backend malformado e manda procurar no `versions.tf`, onde o problema não está.
+
 ## Custo e destruição
 
 | Item | US$/dia ligado 24h |
@@ -227,7 +267,7 @@ Falhou? O suspeito é o security group, não a rede: confirme que `/fase3/eks/no
 | Backup automático (1 dia, ≤100% do storage) | 0 |
 | **Total** | **~0,50** |
 
-Com o Bloco 2 ligado (EKS + NAT + 2 nós, ~US$5,60/dia), a conta fica em **~US$6,10/dia**.
+Com o cluster ligado (EKS + NAT + 2 nós, ~US$5,60/dia), a conta fica em **~US$6,10/dia**.
 
 > **Parar a instância NÃO substitui o `destroy`:** o Learner Lab **religa RDS parado em 7 dias**, e
 > ele volta faturando sem ninguém perceber. O painel de budget do lab atrasa 8–12h — nunca use como
@@ -281,7 +321,7 @@ Detalhamento na documentação arquitetural do repositório da aplicação,
 | Acesso por pertencimento a SG (crachá) em vez de CIDR | regra mínima, e nenhum repositório precisa criar recurso dentro de outro |
 | Senha via `random_password` + SSM SecureString | ela nunca existe no git nem em disco. Fica no state — mas as alternativas também: `data "aws_ssm_parameter"` materializa o valor decifrado no state do mesmo jeito. Só `password_wo` evitaria, ao custo de um modo de falha silencioso (valor ephemeral é regerado a cada execução; um apply interrompido divergiria senha e SSM) |
 | Sem KMS customer-managed | o lab não permite criar chave; usamos as gerenciadas `aws/ssm` e `aws/rds` |
-| `db.t3.micro`, single-AZ, gp2 | tetos do Learner Lab (gp3 e enhanced monitoring bloqueados) e ambiente único (F4) |
+| `db.t3.micro`, single-AZ, gp2 | tetos do Learner Lab (gp3 e enhanced monitoring bloqueados) e ambiente único |
 | `engine_version = "16"` (prefixo) | casa com o dev (`postgres:16`) e deixa a AWS resolver o minor sem gerar diff |
 | `engine_lifecycle_support` desligado | extended support cobra por vCPU-hora — mais que a própria instância |
 | `max_allocated_storage = 0` | storage autoscaling sobe sozinho e **não desce**; num budget fixo isso é custo permanente |
@@ -299,7 +339,7 @@ Detalhamento na documentação arquitetural do repositório da aplicação,
 | Lambda dá erro de conexão onde a app funciona | `rds.force_ssl = 1`: o `pg` do Node não negocia TLS sozinho. Habilite `ssl` no cliente |
 | `InvalidParameterValue` em **`storage_encrypted`** | o lab negou a chave `alias/aws/rds`. Rode o preflight; se confirmar, use `storage_encrypted = false` |
 | `InvalidParameterCombination` na **classe** | `db.t3.micro` não ofertada para essa versão. O preflight testa isso; alternativa é `db.t3.small` |
-| Senha do SSM não conecta | a instância foi recriada e a senha mudou. Releia o parâmetro e redeploye a app (Bloco 4) |
+| Senha do SSM não conecta | a instância foi recriada e a senha mudou. Releia o parâmetro e redeploye a aplicação |
 | `destroy` falha lendo data source | repo 2 já foi destruído. Ver **Recuperação** acima |
 | `Error acquiring the state lock` | lock preso de execução interrompida: `aws s3 cp s3://<bucket>/infra-db/terraform.tfstate.tflock -` para achar o ID e `terraform force-unlock <ID>` |
 | Instância reapareceu sozinha | o lab **religa RDS parado em 7 dias**. Só o `destroy` resolve |
