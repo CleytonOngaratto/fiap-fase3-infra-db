@@ -9,7 +9,7 @@ resource "aws_security_group" "rds" {
 }
 
 # Crachá: nasce vazio e não protege nada — quem o anexa passa a alcançar o banco. É o que permite a
-# Lambda do Bloco 5 chegar no RDS sem criar regra dentro de um SG deste repositório.
+# a Lambda de autenticacao chegar no RDS sem criar regra dentro de um SG deste repositório.
 resource "aws_security_group" "rds_client" {
   name        = "${var.project}-rds-client"
   description = "Cracha de acesso ao RDS: quem anexa este SG alcanca a instancia na 5432."
@@ -33,7 +33,7 @@ resource "aws_vpc_security_group_ingress_rule" "rds_from_client" {
   ip_protocol                  = "tcp"
   from_port                    = local.db_port
   to_port                      = local.db_port
-  description                  = "Portadores do SG de cliente (Lambda do Bloco 5)"
+  description                  = "Portadores do SG de cliente"
 }
 
 resource "aws_vpc_security_group_egress_rule" "client_to_rds" {

@@ -53,7 +53,7 @@ variable "db_username" {
 }
 
 variable "multi_az" {
-  description = "Standby em outra AZ. Dobra o custo e o ambiente é único (F4)."
+  description = "Standby em outra AZ. Dobra o custo e o ambiente é único."
   type        = bool
   default     = false
 }
