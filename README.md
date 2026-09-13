@@ -15,6 +15,11 @@ consumirem.
 Toda a rede vem do repositório 2 via SSM: **nenhum ID de VPC, subnet ou security group é hardcodado
 aqui.**
 
+> 📖 **Referência da API:** este repositório é só infraestrutura e não expõe API própria. A API do
+> sistema é a da aplicação, documentada no **Swagger UI** embutido nela, em
+> `/carworkshop/v1/swagger-ui` — veja
+> [fiap-fase3-app](https://github.com/CleytonOngaratto/fiap-fase3-app#documentação-da-api).
+
 ## Arquitetura
 
 Linha cheia = provisionado por **este** repositório. Tracejado = criado pelos outros repositórios.
