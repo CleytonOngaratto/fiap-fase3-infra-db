@@ -17,7 +17,7 @@ aqui.**
 
 > 📖 **Referência da API:** este repositório é só infraestrutura e não expõe API própria. A API do
 > sistema é a da aplicação, documentada no **Swagger UI** embutido nela, em
-> `/carworkshop/v1/swagger-ui` — veja
+> `/swagger-ui/` — veja
 > [fiap-fase3-app](https://github.com/CleytonOngaratto/fiap-fase3-app#documentação-da-api).
 
 ## Arquitetura
